@@ -1,16 +1,3 @@
-"""
-This module provides utility functions used throughout the application.
-It includes functions for:
-- File path handling
-- PDF processing
-- Image conversion
-- Report enhancement
-- LLM-based evaluation
-
-These utilities support the main analysis functionality by providing
-common operations needed across different parts of the application.
-"""
-
 import os
 import re
 import json
@@ -53,180 +40,251 @@ logger.info("Starting Task Management crew setup.")
 logger.error("Something failed in parsing.")
 
 def get_base64_image(image_path: str) -> str:
-    """
-    Converts an image file to base64 string.
-    
-    Args:
-        image_path (str): Path to the image file
-        
-    Returns:
-        str: Base64 encoded string of the image, or empty string if conversion fails
-    """
     try:
         with open(image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode('utf-8')
     except Exception as e:
-        logging.error(f"Error converting image to base64: {str(e)}")
+        logger.error(f"Error reading image {image_path}: {str(e)}")
         return ""
 
 def convert_windows_path(path: str) -> str:
-    """
-    Converts Windows path format to standard format.
-    
-    Args:
-        path (str): Windows-style path
-        
-    Returns:
-        str: Standardized path format
-    """
     path = path.replace('\\', '/')
     path = path.replace('//', '/')
     return path
 
 def get_pdf_files_from_folder(folder_path: str) -> List[str]:
     """
-    Gets list of PDF files from a folder.
+    Retrieves all PDF files from specified folder.
     
     Args:
-        folder_path (str): Path to the folder
+        folder_path (str): Path to folder containing PDFs
         
     Returns:
-        List[str]: List of PDF file paths
+        List[str]: List of full paths to PDF files
         
     Raises:
-        ValueError: If folder doesn't exist or contains no PDFs
+        FileNotFoundError: If folder doesn't exist or no PDFs found
     """
+    pdf_files = []
     if not os.path.exists(folder_path):
-        raise ValueError(f"Folder does not exist: {folder_path}")
-        
-    pdf_files = [f for f in os.listdir(folder_path) if f.lower().endswith('.pdf')]
+        raise FileNotFoundError(f"The folder {folder_path} does not exist.")
+   
+    for file_name in os.listdir(folder_path):
+        if file_name.lower().endswith('.pdf'):
+            full_path = os.path.join(folder_path, file_name)
+            pdf_files.append(full_path)
+   
     if not pdf_files:
-        raise ValueError(f"No PDF files found in folder: {folder_path}")
-        
-    return [os.path.join(folder_path, f) for f in pdf_files]
+        raise FileNotFoundError(f"No PDF files found in the folder {folder_path}.")
+   
+    return pdf_files
 
 def extract_hyperlinks_from_pdf(pdf_path: str) -> List[Dict[str, str]]:
     """
-    Extracts hyperlinks from a PDF file.
+    Extracts hyperlinks and their context from PDF.
     
     Args:
-        pdf_path (str): Path to the PDF file
+        pdf_path (str): Path to PDF file
         
     Returns:
-        List[Dict[str, str]]: List of dictionaries containing link information
-            Each dict has keys:
-            - 'text': Link text
-            - 'url': Link URL
-            - 'page': Page number
+        List[Dict[str, str]]: List of hyperlink information
     """
     hyperlinks = []
     try:
-        with pdfplumber.open(pdf_path) as pdf:
-            for page_num, page in enumerate(pdf.pages, 1):
-                for link in page.hyperlinks:
-                    hyperlinks.append({
-                        'text': link.get('text', ''),
-                        'url': link.get('url', ''),
-                        'page': page_num
-                    })
+        with open(pdf_path, 'rb') as file:
+            reader = PdfReader(file)
+            for page_num, page in enumerate(reader.pages, start=1):
+                if '/Annots' in page:
+                    for annot in page['/Annots']:
+                        annot_obj = annot.get_object()
+                        if annot_obj['/Subtype'] == '/Link' and '/A' in annot_obj:
+                            uri = annot_obj['/A']['/URI']
+                            text = page.extract_text() or ""
+                            context_start = max(0, text.find(uri) - 50)
+                            context_end = min(len(text), text.find(uri) + len(uri) + 50)
+                            context = text[context_start:context_end].strip()
+                            hyperlinks.append({
+                                "url": uri,
+                                "context": context,
+                                "page": page_num,
+                                "source_file": os.path.basename(pdf_path)
+                            })
     except Exception as e:
-        logging.error(f"Error extracting hyperlinks from {pdf_path}: {str(e)}")
+        logger.error(f"Error extracting hyperlinks from {pdf_path}: {str(e)}")
     return hyperlinks
 
-def enhance_report_markdown(md_text: str) -> str:
-    """
-    Enhances markdown report with better formatting.
-    
-    Args:
-        md_text (str): Original markdown text
-        
-    Returns:
-        str: Enhanced markdown text
-    """
-    # Add any markdown enhancements here
-    return md_text
 
+# def enhance_report_markdown(md_text):
+#     # Remove markdown code fences
+#     cleaned = re.sub(r'^```markdown\n|\n```$', '', md_text, flags=re.MULTILINE)
+#     cleaned = re.sub(r'(\|.+\|)\n\s*(\|-+\|)', r'\1\n\2', cleaned)
+#     cleaned = re.sub(r'\b[4t/]\b', '→', cleaned)
+#     cleaned = re.sub(r'\s*\|\s*', ' | ', cleaned)
+#     cleaned = re.sub(r'[ ]{2,}', ' ', cleaned)
+
+#     status_map = {
+#         "MEDIUM RISK": "**MEDIUM RISK**",
+#         "HIGH RISK": "**HIGH RISK**",
+#         "LOW RISK": "**LOW RISK**",
+#         "ON TRACK": "**ON TRACK**"
+#     }
+#     for k, v in status_map.items():
+#         cleaned = cleaned.replace(k, v)
+
+#     cleaned = re.sub(r'^#\s+(.+)$', r'# \1\n', cleaned, flags=re.MULTILINE)
+#     cleaned = re.sub(r'^##\s+(.+)$', r'## \1\n', cleaned, flags=re.MULTILINE)
+#     cleaned = re.sub(r'^\s*-\s+(.+)', r'- \1', cleaned, flags=re.MULTILINE)
+#     cleaned = re.sub(r'\s*(### )', r'\n\n\1', cleaned)
+#     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+#     cleaned = cleaned.strip()
+
+#     # --- THIS PATCH WILL RESTRUCTURE ALL TABLE BLOBS AFTER EACH "### ..." HEADER ---
+#     def fix_all_tables(md):
+#         result = []
+#         lines = md.splitlines()
+#         i = 0
+#         while i < len(lines):
+#             line = lines[i]
+#             if line.startswith('### '):
+#                 # Add heading
+#                 result.append(line)
+#                 i += 1
+#                 # Collect table blob (might be all one line)
+#                 table_blob = []
+#                 # Skip blank lines after heading
+#                 while i < len(lines) and lines[i].strip() == '':
+#                     result.append('')
+#                     i += 1
+#                 # If table blob is glued in one line, or spans multiple lines
+#                 while i < len(lines) and lines[i].lstrip().startswith('|'):
+#                     table_blob.append(lines[i].strip())
+#                     i += 1
+#                 # If table blob is just one long line, split into rows
+#                 if len(table_blob) == 1:
+#                     row_cells = [p.strip() for p in table_blob[0].split('|') if p.strip()]
+#                     # Detect columns from header row (usually the first row after heading)
+#                     # Find possible column counts (usually 4 or 5)
+#                     # Try 4 and 5, pick the one that matches best with markdown table format
+#                     possible_cols = []
+#                     for col_count in range(3, 8):
+#                         if len(row_cells) % col_count == 0:
+#                             possible_cols.append(col_count)
+#                     if possible_cols:
+#                         ncol = possible_cols[-1]
+#                     else:
+#                         ncol = 4  # fallback
+#                     # Now split into lines
+#                     for j in range(0, len(row_cells), ncol):
+#                         result.append('| ' + ' | '.join(row_cells[j:j+ncol]) + ' |')
+#                 else:
+#                     # Already line-split table
+#                     result.extend(table_blob)
+#             else:
+#                 result.append(line)
+#                 i += 1
+#         return '\n'.join(result)
+
+#     cleaned = fix_all_tables(cleaned)
+#     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+#     cleaned = cleaned.strip()
+#     # DEBUG: Uncomment to print what gets sent to the frontend
+#     print("\n----MARKDOWN DEBUG OUTPUT----\n")
+#     print(cleaned[1350:3390])
+#     print("\n----------------------------\n")
+#     return cleaned.encode('utf-8').decode('utf-8')
+def enhance_report_markdown(md_text):
+    return md_text
 def evaluate_with_llm_judge(source_text: str, generated_report: str) -> dict:
-    """
-    Evaluates the quality of the generated report using LLM.
-    
-    This function uses an LLM to evaluate the generated report against
-    the source text, checking for accuracy, completeness, and quality.
-    
-    Args:
-        source_text (str): Original text from PDFs
-        generated_report (str): Generated analysis report
-        
-    Returns:
-        dict: Evaluation results containing:
-            - accuracy_score: Score for factual accuracy
-            - completeness_score: Score for coverage of information
-            - quality_score: Score for overall report quality
-            - feedback: Detailed feedback on the report
-    """
+    judge_llm = AzureChatOpenAI(
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_version=os.getenv("AZURE_API_VERSION"),
+        azure_deployment=os.getenv("DEPLOYMENT_NAME"),
+        temperature=0,
+        max_tokens=512,
+        timeout=None,
+    )
+   
+    prompt = f"""Act as an impartial judge evaluating report quality. You will be given:
+1. ORIGINAL SOURCE TEXT (extracted from PDF)
+2. GENERATED REPORT (created by AI)
+
+Evaluate based on:
+- Data accuracy (50% weight): Does the report correctly reflect the source data?
+- Analysis depth (30% weight): Does it provide meaningful insights?
+- Clarity (20% weight): Is the presentation clear and professional?
+
+ORIGINAL SOURCE:
+{source_text}
+
+GENERATED REPORT:
+{generated_report}
+
+INSTRUCTIONS:
+1. For each category, give a score (integer) out of its maximum:
+    - Data accuracy: [0-50]
+    - Analysis depth: [0-30]
+    - Clarity: [0-20]
+2. Add up to a TOTAL out of 100.
+3. Give a brief 2-3 sentence evaluation.
+4. Use EXACTLY this format:
+Data accuracy: [0-50]
+Analysis depth: [0-30]
+Clarity: [0-20]
+TOTAL: [0-100]
+Evaluation: [your evaluation]
+
+Your evaluation:"""
+
     try:
-        llm = AzureChatOpenAI(
-            deployment_name=os.getenv('DEPLOYMENT_NAME'),
-            openai_api_version=os.getenv('AZURE_API_VERSION'),
-            openai_api_key=os.getenv('AZURE_OPENAI_API_KEY'),
-            azure_endpoint=os.getenv('AZURE_OPENAI_ENDPOINT'),
-            temperature=0.1
-        )
-        
-        prompt = f"""
-        Evaluate the following generated report against the source text.
-        Provide scores (0-100) for:
-        1. Accuracy: How well does it reflect the source data?
-        2. Completeness: How much of the important information is covered?
-        3. Quality: How well is it written and structured?
-        
-        Also provide specific feedback on strengths and areas for improvement.
-        
-        Source Text:
-        {source_text[:1000]}...
-        
-        Generated Report:
-        {generated_report}
-        
-        Format your response as JSON with these fields:
-        {{
-            "accuracy_score": <score>,
-            "completeness_score": <score>,
-            "quality_score": <score>,
-            "feedback": "<detailed feedback>"
-        }}
-        """
-        
-        response = llm.invoke(prompt)
-        
-        def extract_score(label: str, default: int = 0) -> int:
-            """
-            Extracts a score from the LLM response.
-            
-            Args:
-                label (str): Score label to extract
-                default (int): Default value if extraction fails
-                
-            Returns:
-                int: Extracted score or default value
-            """
-            try:
-                match = re.search(f'"{label}":\s*(\d+)', response)
-                return int(match.group(1)) if match else default
-            except:
-                return default
-        
+        response = judge_llm.invoke(prompt)
+        response_text = response.content
+
+        # Robust extraction: matches label anywhere on line, any case, extra spaces, "35/50" or "35"
+        def extract_score(label, default=0):
+            regex = re.compile(rf"{label}\s*:\s*(\d+)", re.IGNORECASE)
+            for line in response_text.splitlines():
+                match = regex.search(line)
+                if match:
+                    return int(match.group(1))
+            return default
+
+        data_accuracy = extract_score("Data accuracy", 0)
+        analysis_depth = extract_score("Analysis depth", 0)
+        clarity = extract_score("Clarity", 0)
+        total = extract_score("TOTAL", data_accuracy + analysis_depth + clarity)
+
+        # Extract evaluation: combine lines after "Evaluation:" or the last non-score line
+        evaluation = ""
+        eval_regex = re.compile(r"evaluation\s*:\s*(.*)", re.IGNORECASE)
+        found_eval = False
+        for line in response_text.splitlines():
+            match = eval_regex.match(line)
+            if match:
+                evaluation = match.group(1).strip()
+                found_eval = True
+                break
+        # If not found, fallback: concatenate all lines not containing a score label
+        if not found_eval:
+            non_score_lines = [
+                l for l in response_text.splitlines()
+                if not any(lbl in l.lower() for lbl in ["data accuracy", "analysis depth", "clarity", "total"])
+            ]
+            evaluation = " ".join(non_score_lines).strip()
+
         return {
-            "accuracy_score": extract_score("accuracy_score"),
-            "completeness_score": extract_score("completeness_score"),
-            "quality_score": extract_score("quality_score"),
-            "feedback": response
+            "data_accuracy": data_accuracy,
+            "analysis_depth": analysis_depth,
+            "clarity": clarity,
+            "total": total,
+            "text": evaluation
         }
     except Exception as e:
-        logging.error(f"Error in LLM evaluation: {str(e)}")
+        logger.error(f"Error parsing judge response: {e}\nResponse was:\n{locals().get('response_text', '')}")
         return {
-            "accuracy_score": 0,
-            "completeness_score": 0,
-            "quality_score": 0,
-            "feedback": f"Evaluation failed: {str(e)}"
+            "data_accuracy": 0,
+            "analysis_depth": 0,
+            "clarity": 0,
+            "total": 0,
+            "text": "Could not parse evaluation"
         }

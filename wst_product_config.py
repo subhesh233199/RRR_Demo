@@ -1,16 +1,3 @@
-"""
-This module implements the Web Services Toolkit (WST) product pipeline configuration.
-It provides functionality for analyzing WST-specific PDF reports, including:
-- PDF text extraction
-- Metrics processing
-- Visualization generation
-- Report generation
-- Crew AI setup and execution
-
-The module uses CrewAI for orchestrating the analysis process and includes
-fallback mechanisms for visualization and data processing.
-"""
-
 import os
 import re
 import json
@@ -42,7 +29,7 @@ import matplotlib.pyplot as plt
 from tenacity import retry, stop_after_attempt, wait_fixed
 from copy import deepcopy
 import pdfplumber
-from crewai import Agent, Task, Crew, Process
+from crewai import Agent, Task, Crew, Process  # Ensure imports in function scope for clarity
 from shared_state import shared_state
 from app_logging import logger
 from models import (FolderPathRequest
@@ -248,10 +235,10 @@ Return only JSON, no commentary.
 ## Overview
 Write a detailed executive overview (at least 8–10 sentences) for a business/leadership audience:
 - State the overall purpose of the analyzed releases and the versions compared.
-- Highlight major trends and themes visible across all three tables ("Release Scope", "Critical Metrics", "Health Trends"), including cross-version comparisons.
+- Highlight major trends and themes visible across all three tables (“Release Scope”, “Critical Metrics”, “Health Trends”), including cross-version comparisons.
 - Call out significant improvements, regressions, or consistent patterns across versions, referencing specific metrics and values (e.g., increases in ATLs Fixed, improvements in Test Coverage, changes in pass rates).
 - Identify any ongoing risks or problem areas that persist across multiple releases, citing numbers or observed trends.
-- Mention any new issues, resolved blockers, or notable "firsts" for this product's release cycle.
+- Mention any new issues, resolved blockers, or notable “firsts” for this product’s release cycle.
 - Summarize the general health and readiness of the software based on all available data.
 - Compare to prior release cycles or industry benchmarks if relevant.
 - End with a strong statement about the release outlook or readiness for production, backed by specific evidence from the metrics.

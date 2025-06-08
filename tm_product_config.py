@@ -1,16 +1,3 @@
-"""
-This module implements the Task Management (TM) product pipeline configuration.
-It provides functionality for analyzing TM-specific PDF reports, including:
-- PDF text extraction
-- Metrics processing
-- Visualization generation
-- Report generation
-- Crew AI setup and execution
-
-The module uses CrewAI for orchestrating the analysis process and includes
-fallback mechanisms for visualization and data processing.
-"""
-
 import os
 import re
 import json
@@ -42,7 +29,7 @@ import matplotlib.pyplot as plt
 from tenacity import retry, stop_after_attempt, wait_fixed
 from copy import deepcopy
 import pdfplumber
-from crewai import Agent, Task, Crew, Process
+from crewai import Agent, Task, Crew, Process  # Ensure imports in function scope for clarity
 from shared_state import shared_state
 from app_logging import logger
 from models import (FolderPathRequest
@@ -55,7 +42,7 @@ from utils import (convert_windows_path
                    ,enhance_report_markdown
                    ,evaluate_with_llm_judge)
 
-# Disable SSL verification for development
+# Disable SSL verification
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # Suppress warnings
@@ -63,8 +50,7 @@ warnings.filterwarnings("ignore")
 
 # Load environment variables
 load_dotenv()
-
-# Constants for PDF processing
+# Constants
 START_HEADER_PATTERN = 'Release Readiness Critical Metrics (Previous/Current):'
 END_HEADER_PATTERN = 'Release Readiness Functional teams Deliverables Checklist:'
 COLUMNS_OF_INTEREST = ['Metrics', 'Release Criteria', 'Current Release RRR', 'Status']
@@ -89,21 +75,6 @@ llm = LLM(
 )
 
 def run_fallback_visualization(metrics: Dict[str, Any]):
-    """
-    Generates fallback visualizations when the primary visualization fails.
-    
-    This function creates basic charts for all metrics when the AI-generated
-    visualization script fails. It handles different metric types:
-    - ATLS/BTLS metrics: Grouped bar charts
-    - Coverage metrics: Line charts
-    - Other metrics: Bar charts
-    
-    Args:
-        metrics (Dict[str, Any]): Processed metrics data
-        
-    Raises:
-        Exception: If visualization generation fails
-    """
     with shared_state.viz_lock:
         try:
             os.makedirs("visualizations", exist_ok=True)
@@ -115,14 +86,11 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                 logger.error(f"Invalid metrics data: {metrics}")
                 raise ValueError("Metrics data is empty or invalid")
 
-            # Group metrics by type
             atls_btls_metrics = EXPECTED_METRICS[:5]
             coverage_metrics = EXPECTED_METRICS[5:8]
             other_metrics = EXPECTED_METRICS[8:10]
 
             generated_files = []
-            
-            # Process ATLS/BTLS metrics
             for metric in atls_btls_metrics:
                 try:
                     data = metrics['metrics'].get(metric, {})
@@ -135,15 +103,13 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                         plt.savefig(filename)
                         plt.close()
                         generated_files.append(filename)
+                        logger.info(f"Generated placeholder chart for {metric}: {filename}")
                         continue
-
-                    # Extract and validate data
                     atls_data = data.get('ATLS', [])
                     btls_data = data.get('BTLS', [])
                     versions = [item['version'] for item in atls_data if isinstance(item, dict) and 'version' in item and 'value' in item]
                     atls_values = [float(item['value']) if isinstance(item['value'], (int, float)) else 0 for item in atls_data if isinstance(item, dict) and 'version' in item and 'value' in item]
                     btls_values = [float(item['value']) if isinstance(item['value'], (int, float)) else 0 for item in btls_data if isinstance(item, dict) and 'version' in item and 'value' in item]
-
                     if not versions or len(atls_values) != len(versions) or len(btls_values) != len(versions):
                         logger.warning(f"Creating placeholder for {metric}: inconsistent data lengths")
                         plt.figure(figsize=(8,5), dpi=120)
@@ -153,9 +119,8 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                         plt.savefig(filename)
                         plt.close()
                         generated_files.append(filename)
+                        logger.info(f"Generated placeholder chart for {metric}: {filename}")
                         continue
-
-                    # Create grouped bar chart
                     x = np.arange(len(versions))
                     width = 0.35
                     plt.figure(figsize=(8,5), dpi=120)
@@ -171,7 +136,6 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                     plt.close()
                     generated_files.append(filename)
                     logger.info(f"Generated grouped bar chart for {metric}: {filename}")
-
                 except Exception as e:
                     logger.error(f"Failed to generate chart for {metric}: {str(e)}")
                     plt.figure(figsize=(8,5), dpi=120)
@@ -181,8 +145,8 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                     plt.savefig(filename)
                     plt.close()
                     generated_files.append(filename)
+                    logger.info(f"Generated error placeholder chart for {metric}: {filename}")
 
-            # Process coverage metrics
             for metric in coverage_metrics:
                 try:
                     data = metrics['metrics'].get(metric, [])
@@ -195,12 +159,10 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                         plt.savefig(filename)
                         plt.close()
                         generated_files.append(filename)
+                        logger.info(f"Generated placeholder chart for {metric}: {filename}")
                         continue
-
-                    # Extract and validate data
                     versions = [item['version'] for item in data if isinstance(item, dict) and 'version' in item and 'value' in item]
                     values = [float(item['value']) if isinstance(item['value'], (int, float)) else 0 for item in data if isinstance(item, dict) and 'version' in item and 'value' in item]
-
                     if not versions or len(values) != len(versions):
                         logger.warning(f"Creating placeholder for {metric}: inconsistent data lengths")
                         plt.figure(figsize=(8,5), dpi=120)
@@ -210,9 +172,8 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                         plt.savefig(filename)
                         plt.close()
                         generated_files.append(filename)
+                        logger.info(f"Generated placeholder chart for {metric}: {filename}")
                         continue
-
-                    # Create line chart
                     plt.figure(figsize=(8,5), dpi=120)
                     plt.plot(versions, values, marker='o', color='green')
                     plt.xlabel('Release')
@@ -223,7 +184,6 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                     plt.close()
                     generated_files.append(filename)
                     logger.info(f"Generated line chart for {metric}: {filename}")
-
                 except Exception as e:
                     logger.error(f"Failed to generate chart for {metric}: {str(e)}")
                     plt.figure(figsize=(8,5), dpi=120)
@@ -233,8 +193,8 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                     plt.savefig(filename)
                     plt.close()
                     generated_files.append(filename)
+                    logger.info(f"Generated error placeholder chart for {metric}: {filename}")
 
-            # Process other metrics
             for metric in other_metrics:
                 try:
                     data = metrics['metrics'].get(metric, [])
@@ -247,12 +207,10 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                         plt.savefig(filename)
                         plt.close()
                         generated_files.append(filename)
+                        logger.info(f"Generated placeholder chart for {metric}: {filename}")
                         continue
-
-                    # Extract and validate data
                     versions = [item['version'] for item in data if isinstance(item, dict) and 'version' in item and 'value' in item]
                     values = [float(item['value']) if isinstance(item['value'], (int, float)) else 0 for item in data if isinstance(item, dict) and 'version' in item and 'value' in item]
-
                     if not versions or len(values) != len(versions):
                         logger.warning(f"Creating placeholder for {metric}: inconsistent data lengths")
                         plt.figure(figsize=(8,5), dpi=120)
@@ -262,9 +220,8 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                         plt.savefig(filename)
                         plt.close()
                         generated_files.append(filename)
+                        logger.info(f"Generated placeholder chart for {metric}: {filename}")
                         continue
-
-                    # Create bar chart
                     plt.figure(figsize=(8,5), dpi=120)
                     plt.bar(versions, values, color='purple')
                     plt.xlabel('Release')
@@ -275,7 +232,6 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                     plt.close()
                     generated_files.append(filename)
                     logger.info(f"Generated bar chart for {metric}: {filename}")
-
                 except Exception as e:
                     logger.error(f"Failed to generate chart for {metric}: {str(e)}")
                     plt.figure(figsize=(8,5), dpi=120)
@@ -285,8 +241,8 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                     plt.savefig(filename)
                     plt.close()
                     generated_files.append(filename)
+                    logger.info(f"Generated error placeholder chart for {metric}: {filename}")
 
-            # Process Pass/Fail metrics if present
             if 'Pass/Fail' in metrics['metrics']:
                 try:
                     data = metrics['metrics'].get('Pass/Fail', {})
@@ -299,14 +255,13 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                         plt.savefig(filename)
                         plt.close()
                         generated_files.append(filename)
+                        logger.info(f"Generated placeholder chart for Pass/Fail: {filename}")
                     else:
-                        # Extract and validate data
                         pass_data = data.get('Pass', [])
                         fail_data = data.get('Fail', [])
                         versions = [item['version'] for item in pass_data if isinstance(item, dict) and 'version' in item and 'value' in item]
                         pass_values = [float(item['value']) if isinstance(item['value'], (int, float)) else 0 for item in pass_data if isinstance(item, dict) and 'version' in item and 'value' in item]
                         fail_values = [float(item['value']) if isinstance(item['value'], (int, float)) else 0 for item in fail_data if isinstance(item, dict) and 'version' in item and 'value' in item]
-
                         if not versions or len(pass_values) != len(versions) or len(fail_values) != len(versions):
                             logger.warning(f"Creating placeholder for Pass/Fail: inconsistent data lengths")
                             plt.figure(figsize=(8,5), dpi=120)
@@ -316,8 +271,8 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                             plt.savefig(filename)
                             plt.close()
                             generated_files.append(filename)
+                            logger.info(f"Generated placeholder chart for Pass/Fail: {filename}")
                         else:
-                            # Create grouped bar chart
                             x = np.arange(len(versions))
                             width = 0.35
                             plt.figure(figsize=(8,5), dpi=120)
@@ -333,7 +288,6 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                             plt.close()
                             generated_files.append(filename)
                             logger.info(f"Generated grouped bar chart for Pass/Fail: {filename}")
-
                 except Exception as e:
                     logger.error(f"Failed to generate chart for Pass/Fail: {str(e)}")
                     plt.figure(figsize=(8,5), dpi=120)
@@ -343,26 +297,27 @@ def run_fallback_visualization(metrics: Dict[str, Any]):
                     plt.savefig(filename)
                     plt.close()
                     generated_files.append(filename)
+                    logger.info(f"Generated error placeholder chart for Pass/Fail: {filename}")
 
             logger.info(f"Completed fallback visualization, generated {len(generated_files)} files")
-
         except Exception as e:
             logger.error(f"Fallback visualization failed: {str(e)}")
             raise
         finally:
             plt.close('all')
 
-def extract_section_from_pdf(pdf_path: str, start_pattern: str = START_HEADER_PATTERN, end_pattern: str = END_HEADER_PATTERN) -> str:
+def extract_section_from_pdf(pdf_path, start_pattern=START_HEADER_PATTERN, end_pattern=END_HEADER_PATTERN):
     """
-    Extracts a specific section from a PDF file.
+    Extract the section of text between start_pattern and end_pattern
+    (case-insensitive) from the full text of a PDF.
     
     Args:
-        pdf_path (str): Path to the PDF file
-        start_pattern (str): Pattern marking the start of the section
-        end_pattern (str): Pattern marking the end of the section
-        
+        pdf_path (str): Path to the PDF file.
+        start_pattern (str): The starting header text (case-insensitive).
+        end_pattern (str): The ending header text (case-insensitive).
+    
     Returns:
-        str: Extracted text section, or None if not found
+        str: Extracted text section, or None if not found.
     """
     full_text = ""
     with pdfplumber.open(pdf_path) as pdf:
@@ -371,6 +326,7 @@ def extract_section_from_pdf(pdf_path: str, start_pattern: str = START_HEADER_PA
             if page_text:
                 full_text += page_text + "\n"
     
+    # Find the section between start and end header (case-insensitive)
     pattern = re.compile(
         re.escape(start_pattern) + r"(.*?)" + re.escape(end_pattern),
         re.DOTALL | re.IGNORECASE,
@@ -381,46 +337,12 @@ def extract_section_from_pdf(pdf_path: str, start_pattern: str = START_HEADER_PA
     else:
         print("Section not found!")
         return None
-
+    
 def validate_report(report: str) -> bool:
-    """
-    Validates that a report contains all required sections.
-    
-    Args:
-        report (str): The report text to validate
-        
-    Returns:
-        bool: True if all required sections are present
-    """
-    required_sections = [
-        "# Software Metrics Report",
-        "## Overview",
-        "## Metrics Summary",
-        "## Key Findings",
-        "## Recommendations"
-    ]
+    required_sections = ["# Software Metrics Report", "## Overview", "## Metrics Summary", "## Key Findings", "## Recommendations"]
     return all(section in report for section in required_sections)
-
-async def run_full_analysis_tm(request: FolderPathRequest) -> AnalysisResponse:
-    """
-    Runs the full analysis pipeline for Task Management reports.
     
-    This function orchestrates the entire analysis process:
-    1. PDF file processing
-    2. Text extraction
-    3. Metrics analysis
-    4. Visualization generation
-    5. Report generation
-    
-    Args:
-        request (FolderPathRequest): Analysis request containing folder path
-        
-    Returns:
-        AnalysisResponse: Complete analysis results
-        
-    Raises:
-        HTTPException: If any step of the analysis fails
-    """
+async def run_full_analysis(request: FolderPathRequest) -> AnalysisResponse:
     folder_path = convert_windows_path(request.folder_path)
     folder_path = os.path.normpath(folder_path)
 
@@ -455,6 +377,7 @@ async def run_full_analysis_tm(request: FolderPathRequest) -> AnalysisResponse:
                 version_match = re.search(r'(\d+\.\d+)(?:\s|\.)', os.path.basename(pdf))
                 version = version_match.group(1) if version_match else "UNKNOWN"
                 if section_text:
+                    # Add version label at the start of every data row for LLM robustness
                     lines = [line for line in section_text.splitlines() if line.strip()]
                     section_with_version = "\n".join([f"{version} | {line}" for line in lines])
                     extracted_texts.append((os.path.basename(pdf), section_with_version))
@@ -477,7 +400,7 @@ async def run_full_analysis_tm(request: FolderPathRequest) -> AnalysisResponse:
         f"File: {name}\n{text}" for name, text in extracted_texts
     )
 
-    # Get sub-crews
+    # Get sub-crews (now including brief_summary_crew)
     data_crew, report_crew, viz_crew, brief_summary_crew = setup_crew_tm(full_source_text, versions, llm)
 
     # Run crews sequentially and in parallel
@@ -535,7 +458,6 @@ async def run_full_analysis_tm(request: FolderPathRequest) -> AnalysisResponse:
         logger.error("Report missing required sections")
         raise HTTPException(status_code=500, detail="Generated report is incomplete")
 
-    # Generate visualizations
     viz_folder = "visualizations"
     if os.path.exists(viz_folder):
         shutil.rmtree(viz_folder)
@@ -558,7 +480,6 @@ async def run_full_analysis_tm(request: FolderPathRequest) -> AnalysisResponse:
         logger.info("Running fallback visualization")
         run_fallback_visualization(metrics)
 
-    # Process generated visualizations
     viz_base64 = []
     expected_count = 10 + (1 if 'Pass/Fail' in metrics.get('metrics', {}) else 0)
     min_visualizations = 5
@@ -587,7 +508,6 @@ async def run_full_analysis_tm(request: FolderPathRequest) -> AnalysisResponse:
                     detail=f"Failed to generate minimum required visualizations: got {len(viz_base64)}, need at least {min_visualizations}"
                 )
 
-    # Evaluate report quality
     evaluation = evaluate_with_llm_judge(full_source_text, enhanced_report)
 
     return AnalysisResponse(
@@ -596,9 +516,9 @@ async def run_full_analysis_tm(request: FolderPathRequest) -> AnalysisResponse:
         report=enhanced_report,
         evaluation=evaluation,
         hyperlinks=all_hyperlinks,
-        brief_summary=brief_summary
+        brief_summary=brief_summary   # <-- Add this line!
     )
-
+            
 def validate_metrics(metrics: Dict[str, Any]) -> bool:
     """
     Validates the structure and content of metrics data.
@@ -796,6 +716,7 @@ def clean_json_output(raw_output: str, fallback_versions: List[str]) -> dict:
     logger.error(f"Failed to parse JSON, using default structure with zero values for versions: {fallback_versions}")
     return default_json
 
+
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def process_task_output(raw_output: str, fallback_versions: List[str]) -> Dict:
     logger.info(f"Raw output type: {type(raw_output)}, content: {raw_output if isinstance(raw_output, str) else raw_output}")
@@ -873,6 +794,7 @@ def process_task_output(raw_output: str, fallback_versions: List[str]) -> Dict:
                         else:
                             items[i]['trend'] = f"↓ ({abs(pct_change):.1f}%)"
     return data
+
 
 def setup_crew_tm(extracted_text: str, versions: list, llm=llm) -> tuple:
     """
@@ -1103,7 +1025,7 @@ Rules:
 - Do NOT invent or hallucinate extra metrics or values.
 - For each metric, display all available versions.
 - For each metric, create a markdown table with columns: | Version | Value | Status | Trend (if available) |
-- If value/status/trend is missing, show "N/A".
+- If value/status/trend is missing, show “N/A”.
 - All content must come directly from the structured JSON (the output from Data Architect).
 - No additional commentary, markdown sections, or summary—just the markdown tables.
 """,
@@ -1194,3 +1116,180 @@ Do NOT alter content. Just combine with correct formatting.
         verbose=True
     )
     return data_crew, report_crew, viz_crew, brief_summary_crew
+
+async def run_full_analysis_tm(request: FolderPathRequest) -> AnalysisResponse:
+    folder_path = convert_windows_path(request.folder_path)
+    folder_path = os.path.normpath(folder_path)
+
+    if not os.path.exists(folder_path):
+        raise HTTPException(status_code=400, detail=f"Folder path does not exist: {folder_path}")
+
+    pdf_files = get_pdf_files_from_folder(folder_path)
+    logger.info(f"Processing {len(pdf_files)} PDF files")
+
+    # Extract versions from PDF filenames
+    versions = []
+    for pdf_path in pdf_files:
+        match = re.search(r'(\d+\.\d+)(?:\s|\.)', os.path.basename(pdf_path))
+        if match:
+            versions.append(match.group(1))
+    versions = sorted(set(versions))
+    if len(versions) < 2:
+        raise HTTPException(status_code=400, detail="At least two versions are required for analysis")
+
+    # Parallel PDF processing
+    extracted_texts = []
+    all_hyperlinks = []
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        section_futures = {executor.submit(
+            extract_section_from_pdf, pdf, START_HEADER_PATTERN, END_HEADER_PATTERN): pdf for pdf in pdf_files}
+        hyperlink_futures = {executor.submit(extract_hyperlinks_from_pdf, pdf): pdf for pdf in pdf_files}
+
+        for future in as_completed(section_futures):
+            pdf = section_futures[future]
+            try:
+                section_text = future.result()
+                version_match = re.search(r'(\d+\.\d+)(?:\s|\.)', os.path.basename(pdf))
+                version = version_match.group(1) if version_match else "UNKNOWN"
+                if section_text:
+                    # Add version label at the start of every data row for LLM robustness
+                    lines = [line for line in section_text.splitlines() if line.strip()]
+                    section_with_version = "\n".join([f"{version} | {line}" for line in lines])
+                    extracted_texts.append((os.path.basename(pdf), section_with_version))
+            except Exception as e:
+                logger.error(f"Failed to extract section from {pdf}: {str(e)}")
+                continue
+
+        for future in as_completed(hyperlink_futures):
+            pdf = hyperlink_futures[future]
+            try:
+                all_hyperlinks.extend(future.result())
+            except Exception as e:
+                logger.error(f"Failed to process hyperlinks from {pdf}: {str(e)}")
+                continue
+
+    if not extracted_texts:
+        raise HTTPException(status_code=400, detail="No valid text extracted from PDFs")
+
+    full_source_text = "\n".join(
+        f"File: {name}\n{text}" for name, text in extracted_texts
+    )
+
+    # Get sub-crews (now including brief_summary_crew)
+    data_crew, report_crew, viz_crew, brief_summary_crew = setup_crew_tm(full_source_text, versions, llm)
+
+    # Run crews sequentially and in parallel
+    logger.info("Starting data_crew")
+    await data_crew.kickoff_async()
+    logger.info("Data_crew completed")
+
+    # Validate task outputs
+    for i, task in enumerate(data_crew.tasks):
+        if not hasattr(task, 'output') or not hasattr(task.output, 'raw'):
+            logger.error(f"Invalid output for data_crew task {i}: {task}")
+            raise ValueError(f"Data crew task {i} did not produce a valid output")
+        logger.info(f"Data_crew task {i} output: {task.output.raw[:200]}...")
+
+    # Validate metrics
+    if not shared_state.metrics or not isinstance(shared_state.metrics, dict):
+        logger.error(f"Invalid metrics in shared_state: type={type(shared_state.metrics)}, value={shared_state.metrics}")
+        raise HTTPException(status_code=500, detail="Failed to generate valid metrics data")
+    logger.info(f"Metrics after data_crew: {json.dumps(shared_state.metrics, indent=2)[:200]}...")
+
+    # Run report_crew, viz_crew, and brief_summary_crew in parallel
+    logger.info("Starting report_crew, viz_crew, and brief_summary_crew")
+    await asyncio.gather(
+        report_crew.kickoff_async(),
+        viz_crew.kickoff_async(),
+        brief_summary_crew.kickoff_async()
+    )
+    logger.info("report_crew, viz_crew, and brief_summary_crew completed")
+
+    # Validate report_crew output
+    if not hasattr(report_crew.tasks[-1], 'output') or not hasattr(report_crew.tasks[-1].output, 'raw'):
+        logger.error(f"Invalid output for report_crew task {report_crew.tasks[-1]}")
+        raise ValueError("Report crew did not produce a valid output")
+    logger.info(f"Report_crew output: {report_crew.tasks[-1].output.raw[:100]}...")
+
+    # Validate viz_crew output
+    if not hasattr(viz_crew.tasks[0], 'output') or not hasattr(viz_crew.tasks[0].output, 'raw'):
+        logger.error(f"Invalid output for viz_crew task {viz_crew.tasks[0]}")
+        raise ValueError("Visualization crew did not produce a valid output")
+    logger.info(f"Viz_crew output: {viz_crew.tasks[0].output.raw[:100]}...")
+
+    # Validate brief_summary_crew output
+    brief_summary = ""
+    if hasattr(brief_summary_crew.tasks[0], 'output') and hasattr(brief_summary_crew.tasks[0].output, 'raw'):
+        brief_summary = brief_summary_crew.tasks[0].output.raw.strip()
+    else:
+        brief_summary = "Brief summary could not be generated."
+    logger.info(f"Brief Summary: {brief_summary[:100]}...")
+
+    metrics = shared_state.metrics
+
+    # Get report from assemble_report_task
+    enhanced_report = enhance_report_markdown(report_crew.tasks[-1].output.raw)
+    if not validate_report(enhanced_report):
+        logger.error("Report missing required sections")
+        raise HTTPException(status_code=500, detail="Generated report is incomplete")
+
+    viz_folder = "visualizations"
+    if os.path.exists(viz_folder):
+        shutil.rmtree(viz_folder)
+    os.makedirs(viz_folder, exist_ok=True)
+
+    script_path = "visualizations.py"
+    raw_script = viz_crew.tasks[0].output.raw
+    clean_script = re.sub(r'```python|```$', '', raw_script, flags=re.MULTILINE).strip()
+
+    try:
+        with shared_state.viz_lock:
+            with open(script_path, "w", encoding="utf-8") as f:
+                f.write(clean_script)
+            logger.info(f"Visualization script written to {script_path}")
+            logger.debug(f"Visualization script content:\n{clean_script}")
+            runpy.run_path(script_path, init_globals={'metrics': metrics})
+            logger.info("Visualization script executed successfully")
+    except Exception as e:
+        logger.error(f"Visualization script failed: {str(e)}")
+        logger.info("Running fallback visualization")
+        run_fallback_visualization(metrics)
+
+    viz_base64 = []
+    expected_count = 10 + (1 if 'Pass/Fail' in metrics.get('metrics', {}) else 0)
+    min_visualizations = 5
+    if os.path.exists(viz_folder):
+        viz_files = sorted([f for f in os.listdir(viz_folder) if f.endswith('.png')])
+        for img in viz_files:
+            img_path = os.path.join(viz_folder, img)
+            base64_str = get_base64_image(img_path)
+            if base64_str:
+                viz_base64.append(base64_str)
+        logger.info(f"Generated {len(viz_base64)} visualizations, expected {expected_count}, minimum required {min_visualizations}")
+        if len(viz_base64) < min_visualizations:
+            logger.warning("Insufficient visualizations, running fallback")
+            run_fallback_visualization(metrics)
+            viz_files = sorted([f for f in os.listdir(viz_folder) if f.endswith('.png')])
+            viz_base64 = []
+            for img in viz_files:
+                img_path = os.path.join(viz_folder, img)
+                base64_str = get_base64_image(img_path)
+                if base64_str:
+                    viz_base64.append(base64_str)
+            if len(viz_base64) < min_visualizations:
+                logger.error(f"Still too few visualizations: {len(viz_base64)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to generate minimum required visualizations: got {len(viz_base64)}, need at least {min_visualizations}"
+                )
+
+    evaluation = evaluate_with_llm_judge(full_source_text, enhanced_report)
+
+    return AnalysisResponse(
+        metrics=metrics,
+        visualizations=viz_base64,
+        report=enhanced_report,
+        evaluation=evaluation,
+        hyperlinks=all_hyperlinks,
+        brief_summary=brief_summary   # <-- Add this line!
+    )

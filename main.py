@@ -1,18 +1,3 @@
-"""
-This module implements the main FastAPI application for the RRR Release Analysis Tool.
-It provides endpoints for analyzing PDF reports and managing the analysis process.
-
-The application supports:
-- PDF analysis with caching
-- Multiple product pipelines (TM and WST)
-- Visualization generation
-- Report generation
-- Health checks
-
-The module uses FastAPI for the web framework and implements proper error handling,
-logging, and thread safety throughout the analysis process.
-"""
-
 import os
 import re
 import json
@@ -44,7 +29,7 @@ import matplotlib.pyplot as plt
 from tenacity import retry, stop_after_attempt, wait_fixed
 from copy import deepcopy
 import pdfplumber
-from crewai import Agent, Task, Crew, Process
+from crewai import Agent, Task, Crew, Process  # Ensure imports in function scope for clarity
 from shared_state import shared_state
 from app_logging import logger
 from tm_product_config import (process_task_output
@@ -77,11 +62,11 @@ from cache_utils import (init_cache_db
                          ,store_cached_report
                          ,cleanup_old_cache)
 
-# Configure logging
+# Now use as usual:
 logger.info("Starting Task Management crew setup.")
 logger.error("Something failed in parsing.")
 
-# Disable SSL verification for development
+# Disable SSL verification
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # Suppress warnings
@@ -91,51 +76,22 @@ warnings.filterwarnings("ignore")
 load_dotenv()
 
 # Initialize FastAPI app
-app = FastAPI(
-    title="RRR Release Analysis Tool",
-    description="API for analyzing release readiness reports"
-)
+app = FastAPI(title="RRR Release Analysis Tool", description="API for analyzing release readiness reports")
 
-os.makedirs("visualizations", exist_ok=True)
-
-# Add CORS middleware for cross-origin requests
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Initialize cache database
 init_cache_db()
+
 
 @app.post("/analyze", response_model=AnalysisResponse)
 async def analyze_pdfs(request: FolderPathRequest):
-    """
-    Analyzes PDF reports in the specified folder.
-    
-    This endpoint processes PDF files in the given folder path, extracts metrics,
-    generates visualizations, and produces a comprehensive analysis report.
-    
-    The analysis process includes:
-    1. Cache check/cleanup
-    2. PDF file processing
-    3. Metrics extraction
-    4. Visualization generation
-    5. Report generation
-    6. Result caching
-    
-    Args:
-        request (FolderPathRequest): Request containing folder path and options
-        
-    Returns:
-        AnalysisResponse: Analysis results including metrics, visualizations,
-            and report
-            
-    Raises:
-        HTTPException: If folder path is invalid or processing fails
-    """
     try:
         if request.clear_cache:
             cleanup_old_cache()
@@ -155,7 +111,7 @@ async def analyze_pdfs(request: FolderPathRequest):
 
         logger.info(f"Cache miss for folder_path_hash: {folder_path_hash} or cache clear requested, running full analysis")
 
-        # Product routing logic
+        # ---------- Product Routing Logic ----------
         product = getattr(request, "product", "TM").upper()  # Default to TM if missing
 
         if product == "TM":
@@ -167,6 +123,7 @@ async def analyze_pdfs(request: FolderPathRequest):
         else:
             logger.error(f"Unsupported product: {product}")
             raise HTTPException(status_code=400, detail=f"Unsupported product: {product}")
+        # ---------- End Product Routing Logic ----------
 
         store_cached_report(folder_path_hash, pdfs_hash, response)
         return response
@@ -175,19 +132,14 @@ async def analyze_pdfs(request: FolderPathRequest):
         logger.error(f"Error in /analyze endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        plt.close('all')  # Clean up matplotlib resources
+        plt.close('all')
 
-# Mount static files directory for visualizations
+
+
 app.mount("/visualizations", StaticFiles(directory="visualizations"), name="visualizations")
 
 @app.get("/health")
 async def health_check():
-    """
-    Health check endpoint.
-    
-    Returns:
-        dict: Status indicating the service is healthy
-    """
     return {"status": "healthy"}
 
 if __name__ == "__main__":
