@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>How to Add a New Product – RRR Release Analysis Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, Arial, sans-serif; background: #f8f9fa; margin: 0; color: #222;}
+    .container { max-width: 900px; margin: 32px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); padding: 32px; }
+    h1, h2, h3 { color: #2a3f5f; }
+    h2 { margin-top: 2em; }
+    pre { background: #eef; border-radius: 4px; padding: 10px; }
+    ul, ol { margin: 1em 0 1em 2em; }
+    code { background: #eef; border-radius: 3px; padding: 1px 5px;}
+    .tip { background: #e7f7e6; border-left: 4px solid #34b233; padding: 10px; border-radius: 6px; margin: 1.5em 0;}
+    .warn { background: #fff6e5; border-left: 4px solid #ff8c1a; padding: 10px; border-radius: 6px; margin: 1.5em 0;}
+    table { border-collapse: collapse; width: 100%; margin: 1em 0;}
+    th, td { border: 1px solid #ddd; padding: 7px 10px;}
+    th { background: #f0f4fa; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>How to Add a New Product</h1>
+  <h2>Extending the RRR Release Analysis Tool</h2>
+  <p>
+    The app is designed for modular support of multiple products. Adding a new product (with its own PDF format and metric logic) is straightforward. This guide outlines each step.
+  </p>
+
+  <h2>Step 1: Duplicate a Product Config File</h2>
+  <ol>
+    <li>
+      Pick either <code>tm_product_config.py</code> (for TM) or <code>wst_product_config.py</code> (for WST) as your starting point.
+    </li>
+    <li>
+      Copy it to a new file, for example:
+      <pre>cp tm_product_config.py xyz_product_config.py</pre>
+      <i>Replace <b>xyz</b> with your product name or abbreviation.</i>
+    </li>
+    <li>
+      Update all class/function/variable names inside to reflect your new product (search/replace <code>TM</code> or <code>WST</code>).
+    </li>
+  </ol>
+  
+  <h2>Step 2: Define Product-Specific Extraction Logic</h2>
+  <ul>
+    <li>
+      Update table extraction functions to match your PDF format (headers, patterns, table indices, column/metric names).
+    </li>
+    <li>
+      Set new lists for expected metrics and columns:
+      <pre>
+EXPECTED_METRICS = [
+  "Metric A", "Metric B", ...
+]
+COLUMNS_OF_INTEREST = ["Col1", "Col2", ...]
+      </pre>
+    </li>
+    <li>
+      Update the extraction functions for any unique data parsing needed by your product.
+    </li>
+  </ul>
+  
+  <h2>Step 3: Adapt the CrewAI Setup</h2>
+  <ul>
+    <li>
+      Modify <code>setup_crew_xyz</code> (or whatever you call your main config function) to:
+      <ul>
+        <li>Prompt the LLM with your product’s required metrics, columns, and expected output format.</li>
+        <li>Set up agent roles and tasks as in other configs.</li>
+      </ul>
+    </li>
+    <li>
+      Update report and visualization prompts to reflect the structure and language best suited for your new product.
+    </li>
+  </ul>
+  
+  <h2>Step 4: Register Your Product in the Backend</h2>
+  <ol>
+    <li>
+      Open <code>main.py</code>.
+    </li>
+    <li>
+      Import your new config at the top, e.g.:
+      <pre>from xyz_product_config import (setup_crew_xyz, run_full_analysis_xyz, ...)</pre>
+    </li>
+    <li>
+      Find the product routing logic in the <code>/analyze</code> endpoint:
+      <pre>
+if product == "TM":
+    response = await run_full_analysis_tm(request)
+elif product == "WST":
+    response = await run_full_analysis_wst(request)
+# Add this:
+elif product == "XYZ":
+    response = await run_full_analysis_xyz(request)
+else:
+    raise HTTPException(status_code=400, detail=f"Unsupported product: {product}")
+      </pre>
+      <div class="tip">Tip: Product names are matched case-insensitively in the dropdown and backend.</div>
+    </li>
+    <li>
+      (Optional) Add to the <code>productSelect</code> dropdown in <code>frontend.html</code> for user visibility:
+      <pre>
+&lt;select id="productSelect" class="form-select"&gt;
+  &lt;option value="TM"&gt;TM&lt;/option&gt;
+  &lt;option value="WST"&gt;WST&lt;/option&gt;
+  &lt;option value="XYZ"&gt;XYZ&lt;/option&gt; &lt;!-- your new product --&gt;
+&lt;/select&gt;
+      </pre>
+    </li>
+  </ol>
+  
+  <h2>Step 5: Test and Tweak</h2>
+  <ul>
+    <li>Place sample PDFs of your new product in a test folder.</li>
+    <li>Run a full analysis through the web UI and backend.</li>
+    <li>Check: Are metrics, summaries, and charts being generated as intended?</li>
+    <li>
+      Tweak the extraction, prompts, and table logic as needed for best results.
+    </li>
+  </ul>
+  
+  <h2>Step 6: Document & Maintain</h2>
+  <ul>
+    <li>
+      Document any special parsing logic, known issues, or metric definitions for your new product, either in your new config file or in the main <code>README.md</code>.
+    </li>
+    <li>
+      Maintain alignment with backend/LLM API updates, requirements, and UI changes as the codebase evolves.
+    </li>
+  </ul>
+  
+  <h2>Summary Table: Checklist for Adding a Product</h2>
+  <table>
+    <tr><th>Step</th><th>Description</th><th>Where</th></tr>
+    <tr><td>1</td><td>Copy and rename a config file</td><td>project root</td></tr>
+    <tr><td>2</td><td>Adjust extraction & metrics logic</td><td>your new <code>xyz_product_config.py</code></td></tr>
+    <tr><td>3</td><td>Update CrewAI agent prompts/tasks</td><td>your config file</td></tr>
+    <tr><td>4</td><td>Register product in backend routing</td><td><code>main.py</code></td></tr>
+    <tr><td>5</td><td>Add to frontend dropdown</td><td><code>frontend.html</code></td></tr>
+    <tr><td>6</td><td>Test, document, maintain</td><td>all relevant files</td></tr>
+  </table>
+
+  <div class="warn">
+    <b>Note:</b> Your new product’s metrics and table structure should be consistent and robust for best LLM results.<br>
+    Use <b>clear, explicit prompts</b> and test with multiple PDF samples.
+  </div>
+</div>
+</body>
+</html>

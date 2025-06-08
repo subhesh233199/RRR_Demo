@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>How to Use the RRR Release Analysis Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, Arial, sans-serif; margin: 0; background: #f8f9fa; color: #222; }
+    .container { max-width: 900px; margin: 32px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); padding: 32px; }
+    h1, h2, h3 { color: #2a3f5f; margin-top: 1.8em; }
+    h1 { border-bottom: 2px solid #2a3f5f; padding-bottom: 0.2em; }
+    h3 { margin-bottom: 0.3em; }
+    ul, ol { margin: 1em 0 1em 2em; }
+    code, pre { background: #eef; border-radius: 4px; padding: 2px 6px; font-size: 0.95em; }
+    pre { display: block; padding: 12px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin: 1em 0; }
+    th, td { border: 1px solid #ccc; padding: 7px 10px; }
+    th { background: #f0f4fa; }
+    .note { background: #ffe; border-left: 4px solid #ff8c1a; padding: 10px; margin: 1.5em 0; border-radius: 6px; }
+    .flowchart { background: #f7f7fa; border-left: 4px solid #4a6fa5; padding: 10px; border-radius: 6px; margin: 1em 0; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>How to Use the RRR Release Analysis Tool</h1>
+  <h2>Overview</h2>
+  <p>
+    The <b>RRR Release Analysis Tool</b> is an AI-powered web application for automated analysis of software release readiness PDF reports.
+    It extracts, analyzes, visualizes, and summarizes key release metrics for two products: <b>TM</b> and <b>WST</b>.
+  </p>
+  <ul>
+    <li>AI-generated executive and brief summaries</li>
+    <li>Trend charts for all key metrics</li>
+    <li>One-click editing and downloading of reports</li>
+    <li>Caching for quick repeated analysis</li>
+    <li>Modern, browser-based interface</li>
+  </ul>
+  
+  <h2>Step 1: Prerequisites</h2>
+  <ul>
+    <li><b>Python 3.12.4</b> (recommended)</li>
+    <li>All dependencies installed:
+      <pre>pip install -r requirements.txt</pre>
+    </li>
+    <li>A valid Azure OpenAI API key in a <code>.env</code> file</li>
+    <li>Your PDF release readiness reports, saved in a folder</li>
+  </ul>
+  
+  <h2>Step 2: Start the Backend</h2>
+  <ol>
+    <li>Open a terminal in your project directory.</li>
+    <li>Run:
+      <pre>python main.py</pre>
+    </li>
+    <li>
+      The FastAPI server should start at
+      <code>http://127.0.0.1:8080</code>
+      (watch your terminal for confirmation).
+    </li>
+  </ol>
+  
+  <h2>Step 3: Open the Web Frontend</h2>
+  <ol>
+    <li>Open <code>frontend.html</code> in your browser (Chrome, Edge, or Firefox recommended).</li>
+    <li>The UI has three main tabs: <b>Home</b>, <b>Brief Summary</b>, and <b>Executive Summary</b>.</li>
+  </ol>
+  
+  <h2>Step 4: Run an Analysis</h2>
+  <ol>
+    <li>
+      <b>Select Product:</b> Use the dropdown to choose <b>TM</b> or <b>WST</b>.
+    </li>
+    <li>
+      <b>Enter Folder Path:</b> Paste the path to your PDF reports folder.<br>
+      <i>Example:</i> <code>C:\Users\YourName\Desktop\ReleaseReports</code>
+    </li>
+    <li>
+      <b>(Optional) Clear Cache:</b> Check this if you want to force a fresh analysis.
+    </li>
+    <li>
+      <b>Click "Analyze":</b> Press the blue Analyze button. The app will display a spinner: <br>
+      <i>“Analyzing PDFs… This may take a few minutes.”</i>
+    </li>
+  </ol>
+  
+  <h2>Step 5: Review Results</h2>
+  <ul>
+    <li>
+      <b>Executive Summary Tab:</b>
+      <ul>
+        <li><b>Analysis Report:</b> Full markdown report (Overview, Metrics Summary, Key Findings, Recommendations)</li>
+        <li><b>Visualizations:</b> Trend charts and grouped bar charts (all key metrics)</li>
+        <li><b>Evaluation:</b> AI judge feedback and score</li>
+        <li><b>Hyperlinks:</b> Clickable links found in the PDFs</li>
+        <li>
+          <b>You can:</b> <br>
+          <b>-</b> Edit the report <br>
+          <b>-</b> Download as HTML or PDF
+        </li>
+      </ul>
+    </li>
+    <li>
+      <b>Brief Summary Tab:</b>
+      <ul>
+        <li>Concise summary of key findings</li>
+        <li>Extracted hyperlinks</li>
+        <li>Edit/download like the main report</li>
+      </ul>
+    </li>
+  </ul>
+  
+  <h2>Step 6: Additional Features</h2>
+  <ul>
+    <li>
+      <b>Caching:</b> Avoids reprocessing unless files change or cache is cleared.
+    </li>
+    <li>
+      <b>Multi-product:</b> Supports TM and WST releases (ensure correct selection).
+    </li>
+    <li>
+      <b>Metrics Coverage:</b> All required metrics and table formats for both products are handled per config.
+    </li>
+  </ul>
+  
+  <div class="note">
+    <b>Troubleshooting:</b><br>
+    <b>No Results?</b> Check your folder path and that there are at least 2 PDF files. <br>
+    <b>Wrong Product?</b> Ensure your selection matches your PDF format. <br>
+    <b>Backend Not Running?</b> Start <code>main.py</code> and check the terminal for errors. <br>
+    <b>Cache Issues?</b> Use "Clear Cache" for a fresh run.
+  </div>
+  
+  <h2>FAQ</h2>
+  <ul>
+    <li><b>Q:</b> What PDF formats are supported?<br>
+      <b>A:</b> TM and WST release readiness PDFs using your org’s templates.</li>
+    <li><b>Q:</b> Where are generated charts saved?<br>
+      <b>A:</b> In a <code>visualizations/</code> folder (backend); shown as images in the UI.</li>
+    <li><b>Q:</b> Can I modify the summaries?<br>
+      <b>A:</b> Yes! Both summaries are editable before you download them.
+    </li>
+  </ul>
+  
+  <div class="flowchart">
+    <b>Summary Flow:</b><br>
+    1. Start backend → 2. Open frontend.html → 3. Select product, enter folder path, Analyze → 4. Wait → 5. View/edit/download results in tabs
+  </div>
+  
+  <h3>Quick Reference Table</h3>
+  <table>
+    <tr>
+      <th>Feature</th>
+      <th>Location</th>
+      <th>Editable</th>
+      <th>Downloadable</th>
+      <th>Notes</th>
+    </tr>
+    <tr>
+      <td>Executive Summary</td>
+      <td>Exec. Summary Tab</td>
+      <td>✔</td>
+      <td>HTML/PDF</td>
+      <td>Full markdown report</td>
+    </tr>
+    <tr>
+      <td>Visualizations</td>
+      <td>Exec. Summary Tab</td>
+      <td>✖</td>
+      <td>Image only</td>
+      <td>Trend charts</td>
+    </tr>
+    <tr>
+      <td>Brief Summary</td>
+      <td>Brief Summary Tab</td>
+      <td>✔</td>
+      <td>HTML/PDF</td>
+      <td>Concise findings</td>
+    </tr>
+    <tr>
+      <td>Evaluation</td>
+      <td>Exec. Summary Tab</td>
+      <td>✖</td>
+      <td>✖</td>
+      <td>AI judge feedback</td>
+    </tr>
+    <tr>
+      <td>Hyperlinks</td>
+      <td>Both tabs</td>
+      <td>✖</td>
+      <td>✖</td>
+      <td>Extracted from PDFs</td>
+    </tr>
+  </table>
+  
+  <h2>Where to Get Help</h2>
+  <ul>
+    <li>See the README file in your repo root for advanced setup</li>
+    <li>Check your .env settings for Azure/OpenAI errors</li>
+    <li>Review backend logs for troubleshooting</li>
+  </ul>
+</div>
+</body>
+</html>

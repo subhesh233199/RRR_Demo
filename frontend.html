@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RRR Analysis Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2a3f5f;
+            --secondary-color: #4a6fa5;
+            --accent-color: #6c757d;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --light-bg: #f8f9fa;
+            --dark-bg: #343a40;
+        }
+        body { padding: 20px; background-color: var(--light-bg); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; line-height: 1.6; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .card { margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: none; border-radius: 10px; overflow: hidden; }
+        .card-header { background-color: var(--primary-color); color: white; padding: 15px 20px; font-weight: 600; border-bottom: none; }
+        .card-body { padding: 25px; }
+        .visualization { max-width: 100%; margin: 15px 0; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .loading { text-align: center; padding: 30px; }
+        .markdown-container { font-family: inherit; line-height: 1.8; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; background-color: #f8f9fa; white-space: normal; overflow-x: auto; }
+        .markdown-editor { display: none; width: 100%; min-height: 300px; font-family: 'Courier New', Courier, monospace; font-size: 0.95em; padding: 10px; border: 1px solid #e0e0e0; border-radius: 5px; }
+        .edit-controls { margin-bottom: 15px; }
+        .btn-primary:disabled { background-color: var(--accent-color); cursor: not-allowed; }
+        .nav-tabs .nav-link.active { background: var(--primary-color); color: #fff; }
+        .nav-tabs .nav-link { color: var(--primary-color); font-weight: 600; }
+        .tab-content > .tab-pane { padding-top: 18px; }
+        .tab-content { margin-bottom: 25px; }
+        .spinner-border { width: 3rem; height: 3rem; }
+        #reportStatusMessage { text-align: center; margin-top: 18px; font-weight: 600; color: var(--success-color);}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4 text-center" style="color: var(--primary-color);">RRR Analysis Tool</h1>
+        <ul class="nav nav-tabs" id="mainTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="home-tab" data-bs-toggle="tab" data-bs-target="#tab-home" type="button" role="tab" aria-controls="tab-home" aria-selected="true">Home</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="brief-tab" data-bs-toggle="tab" data-bs-target="#tab-brief" type="button" role="tab" aria-controls="tab-brief" aria-selected="false">Brief Summary</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="exec-tab" data-bs-toggle="tab" data-bs-target="#tab-exec" type="button" role="tab" aria-controls="tab-exec" aria-selected="false">Executive Summary</button>
+            </li>
+        </ul>
+        <div class="tab-content" id="mainTabContent">
+            <!-- Home Tab -->
+            <div class="tab-pane fade show active" id="tab-home" role="tabpanel" aria-labelledby="home-tab">
+                <div class="card">
+                    <div class="card-header"><h5 class="mb-0">Enter Folder Path</h5></div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="productSelect" class="form-label">Select Product</label>
+                                <select id="productSelect" class="form-select">
+                                    <option value="TM">TM</option>
+                                    <option value="WST">WST</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <input type="text" id="folderPath" class="form-control" placeholder="Enter folder path (e.g., C:\Users\YourName\Desktop\YourFolder)">
+                            <div class="input-group-text" style="background:transparent; border:none;">
+                                <input class="form-check-input mt-0" type="checkbox" value="" id="clearCacheCheckbox" style="margin-right: 6px;">
+                                <label for="clearCacheCheckbox" style="margin:0; font-size: 0.98em;">Clear Cache</label>
+                            </div>
+                            <button id="analyzeBtn" class="btn btn-primary">Analyze</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="loadingMessage" class="loading" style="display: none;">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-3">Analyzing PDFs... This may take a few minutes.</p>
+                </div>
+                <div id="reportStatusMessage"></div>
+            </div>
+            <!-- Brief Summary Tab -->
+            <div class="tab-pane fade" id="tab-brief" role="tabpanel" aria-labelledby="brief-tab">
+                <div class="card">
+                    <div class="card-header"><h5 class="mb-0">Brief Summary</h5></div>
+                    <div class="card-body">
+                        <div id="briefSummaryContent" class="markdown-container"></div>
+                        <div class="edit-controls mt-3">
+                            <button id="editBriefBtn" class="btn btn-secondary btn-sm">Edit Report</button>
+                            <button id="saveBriefBtn" class="btn btn-success btn-sm" style="display: none;">Save Changes</button>
+                            <button id="cancelBriefEditBtn" class="btn btn-danger btn-sm" style="display: none;">Cancel</button>
+                            <button id="downloadBriefHtmlBtn" class="btn btn-info btn-sm">Download HTML</button>
+                            <button id="downloadBriefPdfBtn" class="btn btn-danger btn-sm">Download PDF</button>
+                        </div>
+                        <textarea id="briefMarkdownEditor" class="markdown-editor"></textarea>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h5 class="mb-0">Hyperlinks</h5></div>
+                    <div class="card-body"><div id="briefHyperlinksContent"></div></div>
+                </div>
+            </div>
+            <!-- Executive Summary Tab -->
+            <div class="tab-pane fade" id="tab-exec" role="tabpanel" aria-labelledby="exec-tab">
+                <div class="card">
+                    <div class="card-header"><h5 class="mb-0">Analysis Report</h5></div>
+                    <div class="card-body">
+                        <div class="edit-controls">
+                            <button id="editReportBtn" class="btn btn-secondary btn-sm">Edit Report</button>
+                            <button id="saveReportBtn" class="btn btn-success btn-sm" style="display: none;">Save Changes</button>
+                            <button id="cancelEditBtn" class="btn btn-danger btn-sm" style="display: none;">Cancel</button>
+                            <button id="downloadHtmlBtn" class="btn btn-info btn-sm">Download HTML</button>
+                            <button id="downloadPdfBtn" class="btn btn-danger btn-sm">Download PDF</button>
+                        </div>
+                        <textarea id="markdownEditor" class="markdown-editor"></textarea>
+                        <div id="reportContent" class="markdown-container"></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h5 class="mb-0">Visualizations</h5></div>
+                    <div class="card-body"><div id="visualizationsContent" class="row"></div></div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h5 class="mb-0">Evaluation</h5></div>
+                    <div class="card-body"><div id="evaluationContent"></div></div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h5 class="mb-0">Hyperlinks</h5></div>
+                    <div class="card-body"><div id="hyperlinksContent"></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Scripts and logic unchanged except button visibility on edit/cancel/save -->
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.4.0/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        if (typeof showdown === 'undefined') {
+            alert('Showdown library not loaded. Markdown rendering may not work.');
+        }
+        const converter = new showdown.Converter({
+            tables: true, tasklists: true, strikethrough: true, emoji: true, underline: true, ghCodeBlocks: true,
+            parseImgDimensions: true, simplifiedAutoLink: true, tablesHeaderId: true, ghMentions: true, openLinksInNewWindow: true
+        });
+
+        document.getElementById('analyzeBtn').addEventListener('click', async () => {
+            const folderPath = document.getElementById('folderPath').value;
+            const clearCache = document.getElementById('clearCacheCheckbox').checked;
+            const product = document.getElementById('productSelect').value;
+            if (!folderPath) { alert('Please enter a folder path'); return; }
+            document.getElementById('loadingMessage').style.display = 'block';
+            document.getElementById('analyzeBtn').disabled = true;
+            document.getElementById('reportStatusMessage').innerText = "";
+
+            try {
+                const response = await axios.post('http://127.0.0.1:8080/analyze', {
+                    folder_path: folderPath,
+                    clear_cache: clearCache,
+                    product: product
+                });
+
+                document.getElementById('loadingMessage').style.display = 'none';
+                document.getElementById('analyzeBtn').disabled = false;
+                document.getElementById('reportStatusMessage').innerText = "Report generated.";
+
+                // -- Executive Summary --
+                const rawMarkdown = (response.data.report || '').replace(/```markdown\s*\n/g, '').replace(/```\s*$/g, '').trim();
+                document.getElementById('reportContent').innerHTML = converter.makeHtml(rawMarkdown);
+                document.getElementById('markdownEditor').value = rawMarkdown;
+                // Always show download buttons (not just after analyzing)
+                document.getElementById('downloadHtmlBtn').style.display = 'inline-block';
+                document.getElementById('downloadPdfBtn').style.display = 'inline-block';
+
+                // -- Brief Summary --
+                const brief = rawMarkdown.split(/\n\s*---+\s*\n/)[0] || rawMarkdown;
+                document.getElementById('briefSummaryContent').innerHTML = converter.makeHtml(brief);
+                document.getElementById('briefMarkdownEditor').value = brief;
+                document.getElementById('downloadBriefHtmlBtn').style.display = 'inline-block';
+                document.getElementById('downloadBriefPdfBtn').style.display = 'inline-block';
+
+                // -- Visualizations --
+                const vizContent = (response.data.visualizations || []).map((base64, idx) =>
+                    `<div class="col-md-6 mb-4"><img src="data:image/png;base64,${base64}" class="visualization" alt="Visualization ${idx + 1}"></div>`
+                ).join('');
+                document.getElementById('visualizationsContent').innerHTML = vizContent;
+
+                // -- Evaluation --
+                const evalData = response.data.evaluation || {};
+                let evalContent = '';
+                if (typeof evalData.data_accuracy === 'undefined') {
+                    evalContent = `
+                        <div class="evaluation-card"><h4>Analysis Quality Score</h4>
+                        <div class="score-display">${evalData.score || 0}/100</div>
+                        <p>${evalData.text || ''}</p></div>`;
+                } else {
+                    evalContent = `
+                        <div class="evaluation-card"><h4>Analysis Quality Breakdown</h4>
+                        <table class="table table-bordered" style="max-width:400px;">
+                        <tr><th>Criteria</th><th>Score</th><th>Max</th></tr>
+                        <tr><td>Data Accuracy</td><td>${evalData.data_accuracy}</td><td>50</td></tr>
+                        <tr><td>Analysis Depth</td><td>${evalData.analysis_depth}</td><td>30</td></tr>
+                        <tr><td>Clarity</td><td>${evalData.clarity}</td><td>20</td></tr>
+                        <tr style="font-weight:bold; background:#f1f1f9;"><td>Total</td><td>${evalData.total}</td><td>100</td></tr>
+                        </table><p style="margin-top:1em;"><b>Judge's Notes:</b> ${evalData.text}</p></div>`;
+                }
+                document.getElementById('evaluationContent').innerHTML = evalContent;
+
+                // -- Hyperlinks (executive) --
+                const linksHtml = (response.data.hyperlinks || []).map(link => `
+                    <div class="hyperlink-card">
+                        <h6><a href="${link.url}" target="_blank" class="hyperlink-url">${link.url}</a></h6>
+                        <p class="hyperlink-context">${link.context || 'No context available'}</p>
+                        <div class="hyperlink-source">
+                            Source: ${link.source_file} (Page ${link.page})
+                        </div>
+                    </div>
+                `).join('');
+                document.getElementById('hyperlinksContent').innerHTML = linksHtml;
+                document.getElementById('briefHyperlinksContent').innerHTML = linksHtml;
+
+            } catch (error) {
+                alert('Error: ' + (error.response?.data?.detail || error.message));
+                document.getElementById('loadingMessage').style.display = 'none';
+                document.getElementById('analyzeBtn').disabled = false;
+            }
+        });
+
+        // ---- Editing and Downloading logic for reports/brief summary ----
+        // -- Executive Summary report --
+        let originalMarkdown = '';
+        document.getElementById('editReportBtn').addEventListener('click', () => {
+            originalMarkdown = document.getElementById('markdownEditor').value;
+            document.getElementById('markdownEditor').style.display = 'block';
+            document.getElementById('reportContent').style.display = 'none';
+            document.getElementById('editReportBtn').style.display = 'none';
+            document.getElementById('saveReportBtn').style.display = 'inline-block';
+            document.getElementById('cancelEditBtn').style.display = 'inline-block';
+            document.getElementById('downloadHtmlBtn').style.display = 'none';
+            document.getElementById('downloadPdfBtn').style.display = 'none';
+        });
+        document.getElementById('saveReportBtn').addEventListener('click', async () => {
+            const edited = document.getElementById('markdownEditor').value;
+            document.getElementById('markdownEditor').value = edited;
+            document.getElementById('reportContent').innerHTML = converter.makeHtml(edited);
+            document.getElementById('markdownEditor').style.display = 'none';
+            document.getElementById('reportContent').style.display = 'block';
+            document.getElementById('editReportBtn').style.display = 'inline-block';
+            document.getElementById('saveReportBtn').style.display = 'none';
+            document.getElementById('cancelEditBtn').style.display = 'none';
+            document.getElementById('downloadHtmlBtn').style.display = 'inline-block';
+            document.getElementById('downloadPdfBtn').style.display = 'inline-block';
+        });
+        document.getElementById('cancelEditBtn').addEventListener('click', () => {
+            document.getElementById('markdownEditor').value = originalMarkdown;
+            document.getElementById('reportContent').innerHTML = converter.makeHtml(originalMarkdown);
+            document.getElementById('markdownEditor').style.display = 'none';
+            document.getElementById('reportContent').style.display = 'block';
+            document.getElementById('editReportBtn').style.display = 'inline-block';
+            document.getElementById('saveReportBtn').style.display = 'none';
+            document.getElementById('cancelEditBtn').style.display = 'none';
+            document.getElementById('downloadHtmlBtn').style.display = 'inline-block';
+            document.getElementById('downloadPdfBtn').style.display = 'inline-block';
+        });
+        document.getElementById('downloadHtmlBtn').addEventListener('click', () => {
+            const fullHtml = `<html><body>${document.getElementById('reportContent').innerHTML}${document.getElementById('visualizationsContent').innerHTML}</body></html>`;
+            const blob = new Blob([fullHtml], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'Analysis_Report.html'; a.click();
+            URL.revokeObjectURL(url);
+        });
+        document.getElementById('downloadPdfBtn').addEventListener('click', () => {
+            const container = document.createElement('div');
+            container.innerHTML = document.getElementById('reportContent').innerHTML + document.getElementById('visualizationsContent').innerHTML;
+            html2pdf().from(container).set({ margin: 1, filename: 'Analysis_Report.pdf', html2canvas: { scale: 2 } }).save();
+        });
+
+        // -- Brief summary editing --
+        let originalBrief = '';
+        document.getElementById('editBriefBtn').addEventListener('click', () => {
+            originalBrief = document.getElementById('briefMarkdownEditor').value;
+            document.getElementById('briefMarkdownEditor').style.display = 'block';
+            document.getElementById('briefSummaryContent').style.display = 'none';
+            document.getElementById('editBriefBtn').style.display = 'none';
+            document.getElementById('saveBriefBtn').style.display = 'inline-block';
+            document.getElementById('cancelBriefEditBtn').style.display = 'inline-block';
+            document.getElementById('downloadBriefHtmlBtn').style.display = 'none';
+            document.getElementById('downloadBriefPdfBtn').style.display = 'none';
+        });
+        document.getElementById('saveBriefBtn').addEventListener('click', () => {
+            const edited = document.getElementById('briefMarkdownEditor').value;
+            document.getElementById('briefMarkdownEditor').value = edited;
+            document.getElementById('briefSummaryContent').innerHTML = converter.makeHtml(edited);
+            document.getElementById('briefMarkdownEditor').style.display = 'none';
+            document.getElementById('briefSummaryContent').style.display = 'block';
+            document.getElementById('editBriefBtn').style.display = 'inline-block';
+            document.getElementById('saveBriefBtn').style.display = 'none';
+            document.getElementById('cancelBriefEditBtn').style.display = 'none';
+            document.getElementById('downloadBriefHtmlBtn').style.display = 'inline-block';
+            document.getElementById('downloadBriefPdfBtn').style.display = 'inline-block';
+        });
+        document.getElementById('cancelBriefEditBtn').addEventListener('click', () => {
+            document.getElementById('briefMarkdownEditor').value = originalBrief;
+            document.getElementById('briefSummaryContent').innerHTML = converter.makeHtml(originalBrief);
+            document.getElementById('briefMarkdownEditor').style.display = 'none';
+            document.getElementById('briefSummaryContent').style.display = 'block';
+            document.getElementById('editBriefBtn').style.display = 'inline-block';
+            document.getElementById('saveBriefBtn').style.display = 'none';
+            document.getElementById('cancelBriefEditBtn').style.display = 'none';
+            document.getElementById('downloadBriefHtmlBtn').style.display = 'inline-block';
+            document.getElementById('downloadBriefPdfBtn').style.display = 'inline-block';
+        });
+        document.getElementById('downloadBriefHtmlBtn').addEventListener('click', () => {
+            const html = `<html><body>${document.getElementById('briefSummaryContent').innerHTML}</body></html>`;
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'Brief_Summary.html'; a.click();
+            URL.revokeObjectURL(url);
+        });
+        document.getElementById('downloadBriefPdfBtn').addEventListener('click', () => {
+            const container = document.createElement('div');
+            container.innerHTML = document.getElementById('briefSummaryContent').innerHTML;
+            html2pdf().from(container).set({ margin: 1, filename: 'Brief_Summary.pdf', html2canvas: { scale: 2 } }).save();
+        });
+
+    </script>
+</body>
+</html>
